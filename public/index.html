@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AkkuChat</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Join Screen (shown initially) -->
+    <div id="join-screen" class="screen">
+        <div class="join-container">
+            <h1>💬 AkkuChat</h1>
+            <p class="subtitle">Enter your username and room ID to start chatting</p>
+            
+            <div class="input-group">
+                <label for="username-input">Username</label>
+                <input 
+                    type="text" 
+                    id="username-input" 
+                    placeholder="Enter your username"
+                    maxlength="30"
+                >
+            </div>
+            
+            <div class="input-group">
+                <label for="room-id-input">Room ID</label>
+                <input 
+                    type="text" 
+                    id="room-id-input" 
+                    placeholder="Enter room ID (e.g., room123)"
+                    maxlength="30"
+                >
+            </div>
+            
+            <button id="join-btn" class="btn btn-primary">Join Room</button>
+            
+            <div id="join-error" class="error-message"></div>
+        </div>
+    </div>
+
+    <!-- Chat Screen (shown after joining) -->
+    <div id="chat-screen" class="screen hidden">
+        <div class="chat-header">
+            <div class="room-info">
+                <h2>Room: <span id="current-room-id"></span></h2>
+                <p class="username-display">You are: <span id="current-username"></span></p>
+            </div>
+            <button id="leave-btn" class="btn btn-secondary">Leave Room</button>
+        </div>
+
+        <!-- Messages Container -->
+        <div id="messages-container" class="messages-container">
+            <!-- Messages will be appended here -->
+        </div>
+
+        <!-- Input Area -->
+        <div class="input-area">
+            <div class="message-input-group">
+                <input 
+                    type="text" 
+                    id="message-input" 
+                    placeholder="Type your message..."
+                    maxlength="500"
+                >
+                <label for="image-input" class="image-btn" title="Upload Image">
+                    📷
+                </label>
+                <input 
+                    type="file" 
+                    id="image-input" 
+                    accept="image/png,image/jpeg,image/jpg"
+                    style="display: none;"
+                >
+                <button id="send-btn" class="btn btn-send">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay (shown during image upload) -->
+    <div id="loading-overlay" class="loading-overlay hidden">
+        <div class="loading-spinner">Uploading image...</div>
+    </div>
+
+    <!-- Socket.IO Client Library -->
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- Main JavaScript -->
+    <script src="script.js"></script>
+</body>
+</html>
+
