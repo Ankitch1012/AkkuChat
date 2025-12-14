@@ -106,6 +106,18 @@ io.on('connection', (socket) => {
       message: `${username} joined the room`
     });
     
+    // Send updated user list to all users in room
+    const roomUsers = [];
+    Object.keys(activeUsers).forEach((sid) => {
+      if (activeUsers[sid].roomId === roomId) {
+        roomUsers.push({
+          socketId: sid,
+          username: activeUsers[sid].username
+        });
+      }
+    });
+    io.to(roomId).emit('room-users-list', roomUsers);
+    
     console.log(`${username} joined room: ${roomId}`);
   });
 
@@ -165,6 +177,136 @@ io.on('connection', (socket) => {
     console.log(`Image shared in room ${user.roomId} by ${user.username}`);
   });
 
+  // Handle getting room users list
+  socket.on('get-room-users', () => {
+    const user = activeUsers[socket.id];
+    if (!user) {
+      return;
+    }
+
+    // Get all users in the same room
+    const roomUsers = [];
+    Object.keys(activeUsers).forEach((socketId) => {
+      if (activeUsers[socketId].roomId === user.roomId && socketId !== socket.id) {
+        roomUsers.push({
+          socketId: socketId,
+          username: activeUsers[socketId].username
+        });
+      }
+    });
+
+    socket.emit('room-users-list', roomUsers);
+  });
+
+  // Handle call initiation
+  socket.on('call-user', (data) => {
+    const caller = activeUsers[socket.id];
+    if (!caller) {
+      return;
+    }
+
+    const { targetSocketId, callType } = data; // callType: 'audio' or 'video'
+    
+    // Verify target is in the same room
+    const target = activeUsers[targetSocketId];
+    if (!target || target.roomId !== caller.roomId) {
+      socket.emit('call-error', { message: 'User not found in room' });
+      return;
+    }
+
+    // Send call request to target user
+    socket.to(targetSocketId).emit('incoming-call', {
+      callerSocketId: socket.id,
+      callerUsername: caller.username,
+      callType: callType
+    });
+
+    console.log(`${caller.username} calling ${target.username} (${callType})`);
+  });
+
+  // Handle call acceptance
+  socket.on('accept-call', (data) => {
+    const { callerSocketId } = data;
+    const user = activeUsers[socket.id];
+    const caller = activeUsers[callerSocketId];
+
+    if (!user || !caller) {
+      return;
+    }
+
+    // Notify caller that call was accepted
+    socket.to(callerSocketId).emit('call-accepted', {
+      answererSocketId: socket.id,
+      answererUsername: user.username
+    });
+
+    console.log(`${user.username} accepted call from ${caller.username}`);
+  });
+
+  // Handle call rejection
+  socket.on('reject-call', (data) => {
+    const { callerSocketId } = data;
+    const user = activeUsers[socket.id];
+    const caller = activeUsers[callerSocketId];
+
+    if (!user || !caller) {
+      return;
+    }
+
+    // Notify caller that call was rejected
+    socket.to(callerSocketId).emit('call-rejected', {
+      answererSocketId: socket.id,
+      answererUsername: user.username
+    });
+
+    console.log(`${user.username} rejected call from ${caller.username}`);
+  });
+
+  // Handle ending a call
+  socket.on('end-call', (data) => {
+    const { targetSocketId } = data;
+    const user = activeUsers[socket.id];
+
+    if (!user) {
+      return;
+    }
+
+    // Notify other party that call ended
+    socket.to(targetSocketId).emit('call-ended', {
+      fromSocketId: socket.id,
+      fromUsername: user.username
+    });
+
+    console.log(`${user.username} ended call`);
+  });
+
+  // WebRTC Signaling: Handle WebRTC offer
+  socket.on('webrtc-offer', (data) => {
+    const { targetSocketId, offer } = data;
+    socket.to(targetSocketId).emit('webrtc-offer', {
+      fromSocketId: socket.id,
+      offer: offer
+    });
+  });
+
+  // WebRTC Signaling: Handle WebRTC answer
+  socket.on('webrtc-answer', (data) => {
+    const { targetSocketId, answer } = data;
+    socket.to(targetSocketId).emit('webrtc-answer', {
+      fromSocketId: socket.id,
+      answer: answer
+    });
+  });
+
+  // WebRTC Signaling: Handle ICE candidates
+  socket.on('webrtc-ice-candidate', (data) => {
+    const { targetSocketId, candidate } = data;
+    socket.to(targetSocketId).emit('webrtc-ice-candidate', {
+      fromSocketId: socket.id,
+      candidate: candidate
+    });
+  });
+
   // Handle disconnection
   socket.on('disconnect', () => {
     const user = activeUsers[socket.id];
@@ -176,10 +318,22 @@ io.on('connection', (socket) => {
         message: `${user.username} left the room`
       });
       
-      console.log(`${user.username} left room: ${user.roomId}`);
-      
-      // Remove user from active users
+      // Remove user from active users first
       delete activeUsers[socket.id];
+      
+      // Send updated user list to remaining users in room
+      const roomUsers = [];
+      Object.keys(activeUsers).forEach((sid) => {
+        if (activeUsers[sid].roomId === user.roomId) {
+          roomUsers.push({
+            socketId: sid,
+            username: activeUsers[sid].username
+          });
+        }
+      });
+      io.to(user.roomId).emit('room-users-list', roomUsers);
+      
+      console.log(`${user.username} left room: ${user.roomId}`);
     }
     
     console.log('User disconnected:', socket.id);

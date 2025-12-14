@@ -41,38 +41,123 @@
 
     <!-- Chat Screen (shown after joining) -->
     <div id="chat-screen" class="screen hidden">
-        <div class="chat-header">
-            <div class="room-info">
-                <h2>Room: <span id="current-room-id"></span></h2>
-                <p class="username-display">You are: <span id="current-username"></span></p>
+        <div class="chat-layout">
+            <!-- Main Chat Area -->
+            <div class="chat-main">
+                <div class="chat-header">
+                    <div class="room-info">
+                        <h2>Room: <span id="current-room-id"></span></h2>
+                        <p class="username-display">You are: <span id="current-username"></span></p>
+                    </div>
+                    <button id="leave-btn" class="btn btn-secondary">Leave Room</button>
+                </div>
+
+                <!-- Messages Container -->
+                <div id="messages-container" class="messages-container">
+                    <!-- Messages will be appended here -->
+                </div>
+
+                <!-- Input Area -->
+                <div class="input-area">
+                    <div class="message-input-group">
+                        <input 
+                            type="text" 
+                            id="message-input" 
+                            placeholder="Type your message..."
+                            maxlength="500"
+                        >
+                        <label for="image-input" class="image-btn" title="Upload Image">
+                            📷
+                        </label>
+                        <input 
+                            type="file" 
+                            id="image-input" 
+                            accept="image/png,image/jpeg,image/jpg"
+                            style="display: none;"
+                        >
+                        <button id="send-btn" class="btn btn-send">Send</button>
+                    </div>
+                </div>
             </div>
-            <button id="leave-btn" class="btn btn-secondary">Leave Room</button>
-        </div>
 
-        <!-- Messages Container -->
-        <div id="messages-container" class="messages-container">
-            <!-- Messages will be appended here -->
+            <!-- Users Sidebar (Discord-style) -->
+            <div class="users-sidebar">
+                <div class="sidebar-header">
+                    <h3>Members</h3>
+                    <span id="user-count">0</span>
+                </div>
+                <div id="users-list" class="users-list">
+                    <!-- Users will be listed here -->
+                </div>
+            </div>
         </div>
+    </div>
 
-        <!-- Input Area -->
-        <div class="input-area">
-            <div class="message-input-group">
-                <input 
-                    type="text" 
-                    id="message-input" 
-                    placeholder="Type your message..."
-                    maxlength="500"
-                >
-                <label for="image-input" class="image-btn" title="Upload Image">
-                    📷
-                </label>
-                <input 
-                    type="file" 
-                    id="image-input" 
-                    accept="image/png,image/jpeg,image/jpg"
-                    style="display: none;"
-                >
-                <button id="send-btn" class="btn btn-send">Send</button>
+    <!-- Incoming Call Modal -->
+    <div id="incoming-call-modal" class="call-modal hidden">
+        <div class="call-modal-content">
+            <div class="call-modal-header">
+                <h2 id="incoming-call-type">Incoming Call</h2>
+            </div>
+            <div class="call-modal-body">
+                <div class="caller-avatar">
+                    <div class="avatar-circle">📞</div>
+                </div>
+                <p class="caller-name" id="incoming-caller-name">Unknown</p>
+                <p class="call-type-text" id="incoming-call-type-text">wants to start a call</p>
+            </div>
+            <div class="call-modal-actions">
+                <button id="accept-call-btn" class="call-btn accept-btn" title="Accept">
+                    ✓
+                </button>
+                <button id="reject-call-btn" class="call-btn reject-btn" title="Decline">
+                    ✕
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Call Interface (Discord-style) -->
+    <div id="call-interface" class="call-interface hidden">
+        <div class="call-container">
+            <!-- Remote Video/Audio -->
+            <div class="remote-media-container">
+                <video id="remote-video" autoplay playsinline></video>
+                <audio id="remote-audio" autoplay></audio>
+                <div id="remote-audio-indicator" class="audio-only-indicator hidden">
+                    <div class="avatar-circle-large">
+                        <span id="remote-username-display">User</span>
+                    </div>
+                    <div class="pulsing-ring"></div>
+                </div>
+            </div>
+
+            <!-- Local Video (Picture-in-Picture) -->
+            <div class="local-media-container">
+                <video id="local-video" autoplay playsinline muted></video>
+                <button id="toggle-local-video" class="pip-toggle" title="Hide Video">🔲</button>
+            </div>
+
+            <!-- Call Controls -->
+            <div class="call-controls">
+                <button id="toggle-mute" class="control-btn mute-btn" title="Mute">
+                    🎤
+                </button>
+                <button id="toggle-video" class="control-btn video-btn" title="Toggle Video">
+                    📹
+                </button>
+                <button id="toggle-screen-share" class="control-btn screen-btn" title="Share Screen">
+                    🖥️
+                </button>
+                <button id="end-call-btn" class="control-btn end-call-btn" title="End Call">
+                    📞
+                </button>
+            </div>
+
+            <!-- Call Status -->
+            <div class="call-status">
+                <span id="call-status-text">Connected</span>
+                <span id="call-duration">00:00</span>
             </div>
         </div>
     </div>
