@@ -611,21 +611,79 @@ function createPeerConnection(targetSocketId, isCaller) {
         });
     }
 
-    // Handle remote stream
+    // Handle remote stream - IMPORTANT: Handle each track individually
     peerConnection.ontrack = (event) => {
-        remoteStream = event.streams[0];
+        console.log('Remote track received:', event.track.kind);
         
-        if (currentCall.callType === 'video') {
+        // Get the stream from the event
+        if (event.streams && event.streams.length > 0) {
+            remoteStream = event.streams[0];
+        } else {
+            // Create a new stream if not provided
+            if (!remoteStream) {
+                remoteStream = new MediaStream();
+            }
+            remoteStream.addTrack(event.track);
+        }
+
+        // Handle video track
+        if (event.track.kind === 'video') {
+            console.log('Remote video track received');
             if (remoteVideo) {
+                // Remove any existing streams first
+                if (remoteVideo.srcObject) {
+                    remoteVideo.srcObject.getTracks().forEach(track => track.stop());
+                }
+                
+                // Set new stream
                 remoteVideo.srcObject = remoteStream;
                 remoteVideo.style.display = 'block';
+                remoteVideo.style.visibility = 'visible';
+                
+                // Force play
+                remoteVideo.play().catch(err => {
+                    console.error('Error playing remote video:', err);
+                    // Retry play after a short delay
+                    setTimeout(() => {
+                        remoteVideo.play().catch(e => console.error('Retry play failed:', e));
+                    }, 500);
+                });
+                
+                // Listen for track ended
+                event.track.onended = () => {
+                    console.log('Remote video track ended');
+                    if (remoteVideo) {
+                        remoteVideo.style.display = 'none';
+                    }
+                };
             }
-            if (remoteAudioIndicator) remoteAudioIndicator.classList.add('hidden');
-        } else {
-            if (remoteAudio) remoteAudio.srcObject = remoteStream;
-            if (remoteAudioIndicator) remoteAudioIndicator.classList.remove('hidden');
-            if (remoteUsernameDisplay) remoteUsernameDisplay.textContent = currentCall.targetUsername;
+            if (remoteAudioIndicator) {
+                remoteAudioIndicator.classList.add('hidden');
+            }
         }
+        
+        // Handle audio track
+        if (event.track.kind === 'audio') {
+            console.log('Remote audio track received');
+            if (remoteAudio) {
+                remoteAudio.srcObject = remoteStream;
+                remoteAudio.play().catch(err => {
+                    console.error('Error playing remote audio:', err);
+                });
+            }
+            // For audio-only calls, show audio indicator
+            if (currentCall.callType === 'audio') {
+                if (remoteAudioIndicator) {
+                    remoteAudioIndicator.classList.remove('hidden');
+                }
+                if (remoteUsernameDisplay) {
+                    remoteUsernameDisplay.textContent = currentCall.targetUsername;
+                }
+            }
+        }
+
+        // Log when stream is ready
+        console.log('Remote stream tracks:', remoteStream.getTracks().map(t => t.kind));
     };
 
     // Handle ICE candidates
@@ -872,17 +930,24 @@ function setupCallEventListeners() {
                         localMediaContainer.style.height = '225px';
                     }
                     
-                    // Replace track in peer connection
+                    // Replace track in peer connection - switch back to camera
                     if (peerConnection) {
                         const sender = peerConnection.getSenders().find(s => 
                             s.track && s.track.kind === 'video'
                         );
                         if (sender) {
-                            sender.replaceTrack(newVideoTrack);
+                            sender.replaceTrack(newVideoTrack).then(() => {
+                                console.log('Camera track replaced successfully after screen share');
+                            }).catch(err => {
+                                console.error('Error replacing camera track:', err);
+                            });
+                        } else {
+                            console.error('No video sender found for camera');
+                            peerConnection.addTrack(newVideoTrack, localStream);
                         }
                     }
                     
-                    oldVideoTrack.stop();
+                    if (oldVideoTrack) oldVideoTrack.stop();
                     toggleScreenShareBtn.classList.remove('active');
                 } else {
                     // Share screen
@@ -908,14 +973,26 @@ function setupCallEventListeners() {
                         localMediaContainer.style.height = '375px';
                     }
                     
-                    // Replace track in peer connection
+                    // Replace track in peer connection - CRITICAL for screen sharing
                     if (peerConnection) {
                         const sender = peerConnection.getSenders().find(s => 
                             s.track && s.track.kind === 'video'
                         );
                         if (sender) {
-                            sender.replaceTrack(newVideoTrack);
+                            sender.replaceTrack(newVideoTrack).then(() => {
+                                console.log('Screen share track replaced successfully - remote user should see it now');
+                            }).catch(err => {
+                                console.error('Error replacing screen share track:', err);
+                                alert('Error sharing screen. Please try again.');
+                            });
+                        } else {
+                            console.error('No video sender found for screen share');
+                            // If no sender exists, add the track
+                            peerConnection.addTrack(newVideoTrack, localStream);
+                            console.log('Added screen share track (no existing sender)');
                         }
+                    } else {
+                        console.error('No peer connection for screen share');
                     }
 
                     // Handle screen share end (when user stops sharing from browser)
@@ -937,8 +1014,12 @@ function setupCallEventListeners() {
                             const sender = peerConnection?.getSenders().find(s => 
                                 s.track && s.track.kind === 'video'
                             );
-                            if (sender) sender.replaceTrack(cameraTrack);
-                            oldVideoTrack.stop();
+                            if (sender) {
+                                sender.replaceTrack(cameraTrack).catch(err => {
+                                    console.error('Error replacing track after screen share end:', err);
+                                });
+                            }
+                            if (oldVideoTrack) oldVideoTrack.stop();
                         });
                     };
                     
@@ -1045,19 +1126,29 @@ socket.on('webrtc-offer', async (data) => {
 
 // Handle WebRTC answer
 socket.on('webrtc-answer', async (data) => {
+    console.log('Received WebRTC answer');
+    
     try {
-        await peerConnection.setRemoteDescription(data.answer);
+        if (!peerConnection) {
+            console.error('No peer connection when receiving answer');
+            return;
+        }
+        
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+        console.log('Remote description set from answer');
     } catch (error) {
         console.error('Error handling answer:', error);
+        alert('Error establishing connection. Please try again.');
         endCall();
     }
 });
 
 // Handle ICE candidate
 socket.on('webrtc-ice-candidate', async (data) => {
-    if (peerConnection) {
+    if (peerConnection && data.candidate) {
         try {
-            await peerConnection.addIceCandidate(data.candidate);
+            await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+            console.log('ICE candidate added');
         } catch (error) {
             console.error('Error adding ICE candidate:', error);
         }
