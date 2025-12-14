@@ -423,7 +423,7 @@ socket.on('disconnect', () => {
 let usersList, userCount, incomingCallModal, incomingCallerName, incomingCallType, incomingCallTypeText;
 let acceptCallBtn, rejectCallBtn, callInterface, localVideo, remoteVideo, remoteAudio;
 let remoteAudioIndicator, remoteUsernameDisplay, toggleMuteBtn, toggleVideoBtn;
-let toggleScreenShareBtn, endCallBtn, callStatusText, callDuration, toggleLocalVideoBtn;
+let toggleScreenShareBtn, endCallBtn, callStatusText, callDuration, toggleLocalVideoBtn, localMediaContainer;
 
 // Initialize call-related DOM elements
 function initCallElements() {
@@ -448,6 +448,7 @@ function initCallElements() {
     callStatusText = document.getElementById('call-status-text');
     callDuration = document.getElementById('call-duration');
     toggleLocalVideoBtn = document.getElementById('toggle-local-video');
+    localMediaContainer = document.getElementById('local-media-container');
 }
 
 // WebRTC variables
@@ -566,11 +567,15 @@ async function initiateCall(targetSocketId, targetUsername, callType) {
             isIncoming: false
         };
 
-        // Setup local video
+        // Setup local video IMMEDIATELY
         if (callType === 'video' && localVideo) {
             localVideo.srcObject = localStream;
             localVideo.style.display = 'block';
+            localVideo.muted = true; // Mute local video to avoid feedback
         }
+
+        // Show call interface immediately (before call is accepted)
+        showCallInterface();
 
         // Create peer connection
         createPeerConnection(targetSocketId, true);
@@ -775,13 +780,17 @@ function setupCallEventListeners() {
 
         localStream = await navigator.mediaDevices.getUserMedia(constraints);
 
-        // Setup local video
+        // Setup local video IMMEDIATELY so both sides can see it
         if (currentCall.callType === 'video' && localVideo) {
             localVideo.srcObject = localStream;
             localVideo.style.display = 'block';
+            localVideo.muted = true; // Mute local video to avoid feedback
         }
 
-        // Create peer connection as answerer
+        // Show call interface immediately
+        showCallInterface();
+
+        // Create peer connection as answerer (before accepting, so stream is ready)
         createPeerConnection(currentCall.targetSocketId, false);
 
         // Accept call
@@ -836,7 +845,15 @@ function setupCallEventListeners() {
     if (toggleScreenShareBtn) {
         toggleScreenShareBtn.addEventListener('click', async () => {
             try {
-                if (localStream.getVideoTracks()[0].getSettings().displaySurface) {
+                const videoTrack = localStream.getVideoTracks()[0];
+                if (!videoTrack) return;
+
+                const settings = videoTrack.getSettings();
+                const isScreenSharing = settings.displaySurface === 'monitor' || 
+                                       settings.displaySurface === 'window' || 
+                                       settings.displaySurface === 'browser';
+                
+                if (isScreenSharing) {
                     // Currently sharing screen, switch back to camera
                     const cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
                     const newVideoTrack = cameraStream.getVideoTracks()[0];
@@ -844,7 +861,16 @@ function setupCallEventListeners() {
                     
                     localStream.removeTrack(oldVideoTrack);
                     localStream.addTrack(newVideoTrack);
-                    if (localVideo) localVideo.srcObject = localStream;
+                    if (localVideo) {
+                        localVideo.srcObject = localStream;
+                        localVideo.style.objectFit = 'cover';
+                    }
+                    
+                    // Adjust container for camera view
+                    if (localMediaContainer) {
+                        localMediaContainer.style.width = '300px';
+                        localMediaContainer.style.height = '225px';
+                    }
                     
                     // Replace track in peer connection
                     if (peerConnection) {
@@ -860,13 +886,27 @@ function setupCallEventListeners() {
                     toggleScreenShareBtn.classList.remove('active');
                 } else {
                     // Share screen
-                    const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                    const screenStream = await navigator.mediaDevices.getDisplayMedia({ 
+                        video: { 
+                            cursor: 'always',
+                            displaySurface: 'monitor'
+                        } 
+                    });
                     const newVideoTrack = screenStream.getVideoTracks()[0];
                     const oldVideoTrack = localStream.getVideoTracks()[0];
                     
                     localStream.removeTrack(oldVideoTrack);
                     localStream.addTrack(newVideoTrack);
-                    if (localVideo) localVideo.srcObject = localStream;
+                    if (localVideo) {
+                        localVideo.srcObject = localStream;
+                        localVideo.style.objectFit = 'contain';
+                    }
+
+                    // Adjust container for screen share (larger)
+                    if (localMediaContainer) {
+                        localMediaContainer.style.width = '500px';
+                        localMediaContainer.style.height = '375px';
+                    }
                     
                     // Replace track in peer connection
                     if (peerConnection) {
@@ -877,6 +917,30 @@ function setupCallEventListeners() {
                             sender.replaceTrack(newVideoTrack);
                         }
                     }
+
+                    // Handle screen share end (when user stops sharing from browser)
+                    newVideoTrack.onended = () => {
+                        toggleScreenShareBtn.classList.remove('active');
+                        // Switch back to camera
+                        navigator.mediaDevices.getUserMedia({ video: true }).then(cameraStream => {
+                            const cameraTrack = cameraStream.getVideoTracks()[0];
+                            localStream.removeTrack(newVideoTrack);
+                            localStream.addTrack(cameraTrack);
+                            if (localVideo) {
+                                localVideo.srcObject = localStream;
+                                localVideo.style.objectFit = 'cover';
+                            }
+                            if (localMediaContainer) {
+                                localMediaContainer.style.width = '300px';
+                                localMediaContainer.style.height = '225px';
+                            }
+                            const sender = peerConnection?.getSenders().find(s => 
+                                s.track && s.track.kind === 'video'
+                            );
+                            if (sender) sender.replaceTrack(cameraTrack);
+                            oldVideoTrack.stop();
+                        });
+                    };
                     
                     oldVideoTrack.stop();
                     toggleScreenShareBtn.classList.add('active');

@@ -133,9 +133,13 @@
             </div>
 
             <!-- Local Video (Picture-in-Picture) -->
-            <div class="local-media-container">
+            <div class="local-media-container" id="local-media-container">
                 <video id="local-video" autoplay playsinline muted></video>
-                <button id="toggle-local-video" class="pip-toggle" title="Hide Video">🔲</button>
+                <div class="local-video-controls">
+                    <button id="toggle-local-video" class="pip-btn" title="Toggle Video">👁️</button>
+                    <button id="resize-local-video" class="pip-btn resize-btn" title="Resize">⛶</button>
+                    <button id="fullscreen-local-video" class="pip-btn" title="Fullscreen">⛶</button>
+                </div>
             </div>
 
             <!-- Call Controls -->
